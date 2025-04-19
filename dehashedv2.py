@@ -1,4 +1,5 @@
-!/usr/bin/env python3
+#!/usr/bin/env python3
+
 # Brent Hartley
 # GNU Public License V3 - June
 
@@ -24,11 +25,25 @@ HEADERS = {
     'Content-Type': 'application/json'
 }
 
-# Search helpers based on new API documentation here: https://app.dehashed.com/documentation/api
+SETTINGS = {
+    "de_dupe": False  # Default is no de-duplication
+}
+
+def toggle_deduplication():
+    current = SETTINGS["de_dupe"]
+    print(f"De-duplication is currently {'ON' if current else 'OFF'}.")
+    new_val = input("Would you like to toggle it? (y/n): ").strip().lower()
+    if new_val == 'y':
+        SETTINGS["de_dupe"] = not current
+        print(f"De-duplication is now {'ON' if SETTINGS['de_dupe'] else 'OFF'}.")
+    else:
+        print("No change made.")
+
+# Search helpers
 def get_search_input(prompt, field):
-    value = input(prompt).strip()  # Strip any extra spaces
+    value = input(prompt).strip()
     if field == "domain":
-        query = f"domain:{value}"  # Ensure it's domain:<value>
+        query = f"domain:{value}"
     elif field == "name":
         query = f"name:{value}"
     elif field == "email":
@@ -36,40 +51,61 @@ def get_search_input(prompt, field):
     elif field == "phone":
         query = f"phone:{value}"
     return {
-        "query": query,  # Correct format for query
-        "page": 1,       # Default to first page
-        "size": 100,     # Default to 100 results
-        "regex": False,  # Default to no regex
-        "wildcard": False,  # Default to no wildcard
-        "de_dupe": False  # Default to no de-duplication
+        "query": query,
+        "page": 1,
+        "size": 100,
+        "regex": False,
+        "wildcard": False,
+        "de_dupe": SETTINGS["de_dupe"]
     }, value
 
 def pretty_print_entry(entry):
-    # This function remains the same, used for converting each entry to a structured format
-    return {
-        "id": entry.get("id"),
-        "email": entry.get("email", []),
-        "ip_address": entry.get("ip_address", []),
-        "username": entry.get("username", []),
-        "password": entry.get("password", []),
-        "hashed_password": entry.get("hashed_password", []),
-        "name": entry.get("name", []),
-        "dob": entry.get("dob", []),
-        "license_plate": entry.get("license_plate", []),
-        "address": entry.get("address", []),
-        "phone": entry.get("phone", []),
-        "company": entry.get("company", []),
-        "url": entry.get("url", []),
-        "social": entry.get("social", []),
-        "cryptocurrency_address": entry.get("cryptocurrency_address", []),
-        "database_name": entry.get("database_name", ""),
-        "raw_record": entry.get("raw_record", {})
-    }
+    output = ["Entry:"]
+    for field, values in entry.items():
+        if field == "database_name":
+            output.append(f"  Database Name: {values}")
+        elif isinstance(values, list):
+            output.extend([f"  {field}: {val}" for val in values if val])
+        elif values:
+            output.append(f"  {field}: {values}")
+    return "\n".join(output)
 
 def save_to_json(entries, filename):
-    # Saving the structured data to a nicely formatted JSON file
     with open(filename, 'w', encoding='utf-8') as f:
-        json.dump(entries, f, indent=4, ensure_ascii=False)  # Pretty print JSON
+        json.dump(entries, f, indent=4, ensure_ascii=False)
+
+def save_results_to_csv(entries, label):
+    txt_filename = f'dehashed_{label}.csv'
+    with open(txt_filename, 'w', newline='', encoding='utf-8') as f:
+        if not entries:
+            print("No entries to write.")
+            return
+
+        all_keys = set()
+        for entry in entries:
+            all_keys.update(entry.keys())
+
+        fieldnames = sorted(all_keys)
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+
+        seen = set()
+        for entry in entries:
+            entry_id = json.dumps(entry, sort_keys=True)
+            if entry_id in seen:
+                continue
+            seen.add(entry_id)
+
+            flat_entry = {}
+            for key in fieldnames:
+                value = entry.get(key)
+                if isinstance(value, list):
+                    flat_entry[key] = ", ".join(map(str, value))
+                else:
+                    flat_entry[key] = value or ""
+            writer.writerow(flat_entry)
+
+    print(f"Results saved to {txt_filename}")
 
 def search_password():
     password_plain = input("Enter the plaintext password to search for: ").strip()
@@ -79,12 +115,10 @@ def search_password():
         "sha256_hashed_password": password_hash
     }, f"password_{password_hash}"
 
-# Monitoring helpers
+# Monitoring functions
 def add_monitoring_domain():
     domain = input("Enter the domain to monitor (e.g., dehashed.com): ").strip()
-    payload = {
-        "domain": domain
-    }
+    payload = {"domain": domain}
     response = requests.post(f"{MONITORING_API_URL}update-domain", headers=HEADERS, json=payload)
     if response.status_code == 200:
         print(f"Successfully added domain: {domain}")
@@ -120,16 +154,14 @@ def update_monitoring_task():
 
 def delete_monitoring_task():
     task_id = input("Enter the task ID to delete: ").strip()
-    payload = {
-        "id": task_id
-    }
+    payload = {"id": task_id}
     response = requests.post(f"{MONITORING_API_URL}delete-task", headers=HEADERS, json=payload)
     if response.status_code == 200:
         print(f"Task {task_id} deleted successfully.")
     else:
         print(f"Error deleting task: {response.status_code}, {response.text}")
 
-# Mapping input choice to search types
+# Menu mapping
 SEARCH_OPTIONS = {
     '1': lambda: get_search_input("Enter a domain to search: ", "domain"),
     '2': lambda: get_search_input("Enter a person's name to search: ", "name"),
@@ -145,98 +177,74 @@ MONITORING_OPTIONS = {
     '4': delete_monitoring_task
 }
 
-def pretty_print_entry(entry):
-    output = ["Entry:"]
-    for field, values in entry.items():
-        if field == "database_name":
-            output.append(f"  Database Name: {values}")
-        elif isinstance(values, list):
-            output.extend([f"  {field}: {val}" for val in values if val])
-        elif values:
-            output.append(f"  {field}: {values}")
-    return "\n".join(output)
-
-def save_results_to_csv(entries, label):
-    txt_filename = f'dehashed_{label}.csv'
-    with open(txt_filename, 'w', newline='', encoding='utf-8') as f:
-        if not entries:
-            print("No entries to write.")
-            return
-
-        # Collect all possible keys (union of all entry keys)
-        all_keys = set()
-        for entry in entries:
-            all_keys.update(entry.keys())
-
-        fieldnames = sorted(all_keys)
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-
-        seen = set()
-        for entry in entries:
-            entry_id = json.dumps(entry, sort_keys=True)
-            if entry_id in seen:
-                continue
-            seen.add(entry_id)
-
-            # Flatten list values into comma-separated strings
-            flat_entry = {}
-            for key in fieldnames:
-                value = entry.get(key)
-                if isinstance(value, list):
-                    flat_entry[key] = ", ".join(map(str, value))
-                else:
-                    flat_entry[key] = value or ""
-            writer.writerow(flat_entry)
-
-    print(f"Results saved to {txt_filename}")
-
+# Main logic
 def main():
     print("Welcome to Brent's Dark Web scanner of doom. Proceed at your own risk!")
-    print("What would you like to search for?")
-    print("1. Domain")
-    print("2. Person")
-    print("3. Email address")
-    print("4. Telephone number")
-    print("5. Password (plaintext)")
+    print("Choose an option:")
+    print("1. Run a search")
+    print("2. Monitoring options")
+    print("3. Toggle de-duplication setting")
 
-    choice = input("Enter the number corresponding to your choice: ")
-    if choice not in SEARCH_OPTIONS:
-        print("Invalid choice.")
-        return
+    mode = input("Enter your choice: ").strip()
 
-    payload, label = SEARCH_OPTIONS[choice]()
-    json_filename = f'dehashed_{label}.json'
+    if mode == '1':
+        print("What would you like to search for?")
+        print("1. Domain")
+        print("2. Person")
+        print("3. Email address")
+        print("4. Telephone number")
+        print("5. Password (plaintext)")
 
-    url = PASSWORD_URL if choice == '5' else API_URL
+        choice = input("Enter the number corresponding to your choice: ").strip()
+        if choice not in SEARCH_OPTIONS:
+            print("Invalid choice.")
+            return
 
-    try:
-        response = requests.post(url, headers=HEADERS, json=payload)
-        if response.status_code == 200:
-            data = response.json()
-            entries = data.get("entries", [])
-            if not entries:
-                print("No entries found.")
-                return
+        payload, label = SEARCH_OPTIONS[choice]()
+        json_filename = f'dehashed_{label}.json'
+        url = PASSWORD_URL if choice == '5' else API_URL
 
-            # Prepare structured data for JSON
-            structured_entries = [pretty_print_entry(entry) for entry in entries]
+        try:
+            response = requests.post(url, headers=HEADERS, json=payload)
+            if response.status_code == 200:
+                data = response.json()
+                entries = data.get("entries", [])
+                if not entries:
+                    print("No entries found.")
+                    return
 
-            # Save the structured data to a nicely formatted JSON file
-            save_to_json(structured_entries, json_filename)
+                structured_entries = [pretty_print_entry(entry) for entry in entries]
+                save_to_json(structured_entries, json_filename)
+                print(f"Results saved to {json_filename}")
 
-            print(f"Results saved to {json_filename}")
+            elif response.status_code == 429:
+                print("Rate limit hit: Too many requests.")
+            elif response.status_code == 403:
+                print("Check your API key in the config file.")
+            else:
+                print(f"Error: {response.status_code}")
+                print(response.text)
 
-        elif response.status_code == 429:
-            print("Rate limit hit: Too many requests.")
-        elif response.status_code == 403:
-            print("Check your API key in the config file.")
+        except Exception as e:
+            print(f"Exception occurred: {e}")
+
+    elif mode == '2':
+        print("Monitoring Menu:")
+        print("1. Add domain to monitoring")
+        print("2. View current monitoring tasks")
+        print("3. Update a monitoring task")
+        print("4. Delete a monitoring task")
+
+        monitoring_choice = input("Enter your choice (1–4): ").strip()
+        if monitoring_choice in MONITORING_OPTIONS:
+            MONITORING_OPTIONS[monitoring_choice]()
         else:
-            print(f"Error: {response.status_code}")
-            print(response.text)
+            print("Invalid monitoring choice.")
 
-    except Exception as e:
-        print(f"Exception occurred: {e}")
+    elif mode == '3':
+        toggle_deduplication()
+    else:
+        print("Invalid selection.")
 
 if __name__ == "__main__":
     main()
