@@ -1,7 +1,7 @@
 # dehahsed_apiv2
 Menu based search using the new (V2) API from dehashed.com 
 
-To get started, you’ll need a valid Dehashed API key, which you should place in a file called configuration.txt. This key is used for authenticating your requests to the Dehashed API. Note: You'll need to refresh your API key as the V1 key has been deprecaiated. 
+To get started, you’ll need a valid Dehashed API key, which you should place in a file called configuration.txt. This key is used for authenticating your requests to the Dehashed API. Note: You'll need to refresh your API key as the V1 key has been depreciated. 
 
 configuration.txt should only contain your API key. No username or other password information. 
 
