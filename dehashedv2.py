@@ -39,17 +39,10 @@ def toggle_deduplication():
     else:
         print("No change made.")
 
-# Search helpers
+# ✅ Fixed function: no quotes around value
 def get_search_input(prompt, field):
     value = input(prompt).strip()
-    if field == "domain":
-        query = f"domain:{value}"
-    elif field == "name":
-        query = f"name:{value}"
-    elif field == "email":
-        query = f"email:{value}"
-    elif field == "phone":
-        query = f"phone:{value}"
+    query = f"{field}:{value}"
     return {
         "query": query,
         "page": 1,
